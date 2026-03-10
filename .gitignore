@@ -1,0 +1,18 @@
+# Secrets
+.env
+.env.local
+.env.*.local
+
+# OpenClaw runtime data (contains API keys, session data, device keys)
+.openclaw-data/
+
+# Google OAuth tokens & credentials
+.gog-auth/
+client_secret*.json
+
+# Personal files in my_info (keep examples)
+my_info/*
+!my_info/*.example.*
+
+# macOS
+.DS_Store

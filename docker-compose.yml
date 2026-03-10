@@ -1,0 +1,29 @@
+services:
+  openclaw-gateway:
+    build: .
+    image: openclaw-custom:latest
+    container_name: openclaw-gateway
+    restart: unless-stopped
+    init: true
+    ports:
+      - "${OPENCLAW_GATEWAY_PORT:-18789}:18789"
+    environment:
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
+      MINIMAX_API_KEY: ${MINIMAX_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      CUSTOM_API_KEY: ${CUSTOM_API_KEY:-}
+      BRAVE_API_KEY: ${BRAVE_API_KEY:-}
+      GMAIL_API_KEY: ${GMAIL_API_KEY:-}
+      GOG_KEYRING_PASSWORD: ${GOG_KEYRING_PASSWORD:-openclaw}
+    volumes:
+      - ${OPENCLAW_CONFIG_DIR}:/home/node/.openclaw
+      - ${OPENCLAW_WORKSPACE_DIR}:/home/node/.openclaw/workspace
+      - ./my_info:/home/node/.openclaw/workspace/my_info:rw
+      - ./.gog-auth:/home/node/.config/gogcli
+    command:
+      - sh
+      - -lc
+      - openclaw gateway --allow-unconfigured
