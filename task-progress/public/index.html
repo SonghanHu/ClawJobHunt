@@ -68,6 +68,10 @@
       font: inherit;
     }
     .flow-board { display: grid; gap: 1rem; }
+    .flow-section { display: grid; gap: 0.85rem; }
+    .flow-section + .flow-section { margin-top: 1.2rem; }
+    .flow-section-title { font-size: 1rem; font-weight: 700; }
+    .flow-section-sub { font-size: 0.82rem; color: var(--muted); margin-top: -0.35rem; }
     .flow-card {
       background: var(--card);
       border: 1px solid var(--border);
@@ -82,6 +86,12 @@
       align-items: flex-start;
       flex-wrap: wrap;
       margin-bottom: 0.6rem;
+    }
+    .flow-top-actions {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      flex-wrap: wrap;
     }
     .flow-title { font-size: 1rem; font-weight: 600; }
     .flow-sub { font-size: 0.82rem; color: var(--muted); margin-top: 0.2rem; }
@@ -263,6 +273,14 @@
           <option value="history">历史任务流</option>
         </select>
       </label>
+      <label>
+        系统
+        <select id="system-filter">
+          <option value="all">全部系统</option>
+          <option value="sop">三权分立系统</option>
+          <option value="lobster">龙虾主系统</option>
+        </select>
+      </label>
       <label class="checkbox">
         <input id="include-orphans" type="checkbox" />
         显示未归档 session
@@ -287,7 +305,8 @@
       tools: null,
       lastLoadedAt: null,
       expandedSessions: new Set(),
-      filters: { agent: 'all', query: '', scope: 'active', includeOrphans: false },
+      collapsedFlows: new Set(),
+      filters: { agent: 'all', query: '', scope: 'active', system: 'all', includeOrphans: false },
     };
 
     function el(tag, attrs, ...children) {
@@ -464,6 +483,11 @@
         hiddenSummary,
       };
     }
+    function classifyFlowSystem(flow) {
+      const agentIds = new Set(flow.steps.map((step) => step.agentId).filter(Boolean));
+      if ([...agentIds].some((id) => ['secretary', 'legislature', 'executive', 'judiciary'].includes(id))) return 'sop';
+      return 'lobster';
+    }
     function renderStats(sessions, pipeline, tools) {
       const root = document.getElementById('stats-grid');
       const enriched = enrichSessions(sessions, tools);
@@ -505,6 +529,7 @@
       if (!agentIds.includes(current)) select.value = 'all';
       document.getElementById('session-search').value = state.filters.query;
       document.getElementById('scope-filter').value = state.filters.scope;
+      document.getElementById('system-filter').value = state.filters.system;
       document.getElementById('include-orphans').checked = state.filters.includeOrphans;
     }
     function renderDashboard(sessions, pipeline, tools) {
@@ -524,6 +549,8 @@
         return true;
       });
       const filtered = flows.filter((flow) => {
+        const system = classifyFlowSystem(flow);
+        if (state.filters.system !== 'all' && system !== state.filters.system) return false;
         if (state.filters.agent !== 'all' && !flow.steps.some((step) => step.agentId === state.filters.agent)) return false;
         if (!query) return true;
         return [
@@ -543,86 +570,129 @@
         root.appendChild(el('div', { className: 'empty' }, '没有匹配的任务流。'));
         return;
       }
-      for (const flow of filtered) {
+      const grouped = {
+        sop: filtered.filter((flow) => classifyFlowSystem(flow) === 'sop'),
+        lobster: filtered.filter((flow) => classifyFlowSystem(flow) === 'lobster'),
+      };
+      const sections = state.filters.system === 'all'
+        ? [
+            { id: 'sop', title: '三权分立系统', sub: 'Secretary / Legislature / Executive / Judiciary 相关任务流', flows: grouped.sop },
+            { id: 'lobster', title: '龙虾主系统', sub: '主龙虾自身会话与未进入三权流程的任务流', flows: grouped.lobster },
+          ]
+        : [
+            {
+              id: state.filters.system,
+              title: state.filters.system === 'sop' ? '三权分立系统' : '龙虾主系统',
+              sub: state.filters.system === 'sop' ? 'Secretary / Legislature / Executive / Judiciary 相关任务流' : '主龙虾自身会话与未进入三权流程的任务流',
+              flows: filtered,
+            }
+          ];
+      for (const section of sections) {
+        if (!section.flows.length) continue;
+        const sectionNode = el('div', { className: 'flow-section' },
+          el('div', { className: 'flow-section-title' }, section.title),
+          el('div', { className: 'flow-section-sub' }, section.sub)
+        );
+        for (const flow of section.flows) {
+        const collapsed = state.collapsedFlows.has(flow.id);
         const card = el('div', { className: 'flow-card' },
           el('div', { className: 'flow-top' },
             el('div', null,
               el('div', { className: 'flow-title' }, flow.title),
               el('div', { className: 'flow-sub' }, flow.source === 'orphan' ? '未归档 session，未能并入明确任务流' : '用户/秘书发起后，按阶段串联 agent 与工具调用')
             ),
-            el('div', { className: 'flow-badges' },
-              el('span', { className: 'pill' }, '阶段 ' + flow.steps.length),
-              el('span', { className: 'pill' }, '工具 ' + flow.toolCount)
+            el('div', { className: 'flow-top-actions' },
+              el('div', { className: 'flow-badges' },
+                el('span', { className: 'pill' }, '阶段 ' + flow.steps.length),
+                el('span', { className: 'pill' }, '工具 ' + flow.toolCount)
+              ),
+              el('button', {
+                type: 'button',
+                className: 'text-button',
+                onclick: () => {
+                  if (state.collapsedFlows.has(flow.id)) state.collapsedFlows.delete(flow.id);
+                  else state.collapsedFlows.add(flow.id);
+                  renderDashboard(state.sessions, state.pipeline, state.tools);
+                }
+              }, collapsed ? '展开主 Session' : '收起主 Session')
             )
           ),
-          el('div', { className: 'flow-meta' },
-            el('span', null, '开始 ', formatTs(flow.startedAt)),
-            el('span', null, '最近更新 ', formatTs(flow.updatedAt))
-          ),
-          el('div', { className: 'flow-steps' },
-            el('div', { className: 'flow-node start' },
-              el('div', { className: 'flow-node-title' }, '用户 / 秘书 发起任务'),
-              el('div', { className: 'flow-node-meta' },
-                el('span', null, '发起时间 ', formatTime(flow.startedAt)),
-                el('span', null, '任务流 ', flow.id)
-              )
+          !collapsed ? el('div', null,
+            el('div', { className: 'flow-meta' },
+              el('span', null, '开始 ', formatTs(flow.startedAt)),
+              el('span', null, '最近更新 ', formatTs(flow.updatedAt))
             ),
-            ...flow.steps.flatMap((step, index) => {
-              const session = step.session || null;
-              const events = session ? (state.expandedSessions.has(session.sessionId) ? session.events : session.events.slice(0, 6)) : [];
-              const toolSection = session
-                ? session.events.length
-                  ? el('div', { className: 'session-tools' }, ...events.map((ev) => {
-                      const summary = ev.input || ev.output || '';
-                      return el('div', { className: 'session-tool ' + (ev.type === 'toolCall' ? 'call' : 'result') },
-                        el('div', { className: 'head' },
-                          el('span', { className: 'time' }, formatTime(ev.at)),
-                          el('span', { className: 'pill' }, ev.type === 'toolCall' ? '调用' : '响应'),
-                          el('span', { className: 'tool' }, ev.toolName || 'unknown'),
-                          ev.model ? el('span', { className: 'pill muted' }, ev.model) : null
-                        ),
-                        summary ? el('div', { className: 'summary' }, summary.slice(0, 240)) : null
-                      );
-                    }))
-                  : el('div', { className: 'flow-empty-note' }, '该 session 暂无工具记录。')
-                : el('div', { className: 'flow-empty-note' }, '尚未匹配到对应 session。');
-              const children = [
-                el('div', { className: 'flow-arrow' }, '↓'),
-                el('div', { className: 'flow-node step' },
-                  el('div', { className: 'flow-node-top' },
-                    el('div', null,
-                      el('div', { className: 'flow-node-title' }, agentLabel(step.agentId), ' · ', step.title || '未命名阶段'),
-                      session ? el('div', { className: 'flow-node-sub' }, session.sessionKey) : null
+            el('div', { className: 'flow-steps' },
+              el('div', { className: 'flow-node start' },
+                el('div', { className: 'flow-node-title' }, '用户 / 秘书 发起任务'),
+                el('div', { className: 'flow-node-meta' },
+                  el('span', null, '发起时间 ', formatTime(flow.startedAt)),
+                  el('span', null, '任务流 ', flow.id)
+                )
+              ),
+              ...flow.steps.flatMap((step, index) => {
+                const session = step.session || null;
+                const events = session ? (state.expandedSessions.has(session.sessionId) ? session.events : session.events.slice(0, 6)) : [];
+                const toolSection = session
+                  ? session.events.length
+                    ? el('div', { className: 'session-tools' }, ...events.map((ev) => {
+                        const summary = ev.input || ev.output || '';
+                        return el('div', { className: 'session-tool ' + (ev.type === 'toolCall' ? 'call' : 'result') },
+                          el('div', { className: 'head' },
+                            el('span', { className: 'time' }, formatTime(ev.at)),
+                            el('span', { className: 'pill' }, ev.type === 'toolCall' ? '调用' : '响应'),
+                            el('span', { className: 'tool' }, ev.toolName || 'unknown'),
+                            ev.model ? el('span', { className: 'pill muted' }, ev.model) : null
+                          ),
+                          summary ? el('div', { className: 'summary' }, summary.slice(0, 240)) : null
+                        );
+                      }))
+                    : el('div', { className: 'flow-empty-note' }, '该 session 暂无工具记录。')
+                  : el('div', { className: 'flow-empty-note' }, '尚未匹配到对应 session。');
+                const children = [
+                  el('div', { className: 'flow-arrow' }, '↓'),
+                  el('div', { className: 'flow-node step' },
+                    el('div', { className: 'flow-node-top' },
+                      el('div', null,
+                        el('div', { className: 'flow-node-title' }, agentLabel(step.agentId), ' · ', step.title || '未命名阶段'),
+                        session ? el('div', { className: 'flow-node-sub' }, session.sessionKey) : null
+                      ),
+                      el('div', { className: 'flow-badges' },
+                        el('span', { className: 'pill' }, '工具 ' + (session?.toolCount || 0)),
+                        session?.chatType ? el('span', { className: 'pill muted' }, session.chatType) : null
+                      )
                     ),
-                    el('div', { className: 'flow-badges' },
-                      el('span', { className: 'pill' }, '工具 ' + (session?.toolCount || 0)),
-                      session?.chatType ? el('span', { className: 'pill muted' }, session.chatType) : null
-                    )
+                    el('div', { className: 'flow-node-meta' },
+                      el('span', null, '阶段时间 ', formatTs(step.phase?.at || step.at)),
+                      session ? el('span', null, 'sessionId ', session.sessionId || '—') : null,
+                      session ? el('span', null, '最近活动 ', formatTs(session.activityAt)) : null
+                    ),
+                    toolSection,
+                    session && session.events.length > 6 ? el('div', { className: 'session-actions' },
+                      el('button', {
+                        type: 'button',
+                        className: 'text-button',
+                        onclick: () => {
+                          if (state.expandedSessions.has(session.sessionId)) state.expandedSessions.delete(session.sessionId);
+                          else state.expandedSessions.add(session.sessionId);
+                          renderDashboard(state.sessions, state.pipeline, state.tools);
+                        }
+                      }, state.expandedSessions.has(session.sessionId) ? '收起工具流' : '展开全部工具流')
+                    ) : null
                   ),
-                  el('div', { className: 'flow-node-meta' },
-                    el('span', null, '阶段时间 ', formatTs(step.phase?.at || step.at)),
-                    session ? el('span', null, 'sessionId ', session.sessionId || '—') : null,
-                    session ? el('span', null, '最近活动 ', formatTs(session.activityAt)) : null
-                  ),
-                  toolSection,
-                  session && session.events.length > 6 ? el('div', { className: 'session-actions' },
-                    el('button', {
-                      type: 'button',
-                      className: 'text-button',
-                      onclick: () => {
-                        if (state.expandedSessions.has(session.sessionId)) state.expandedSessions.delete(session.sessionId);
-                        else state.expandedSessions.add(session.sessionId);
-                        renderDashboard(state.sessions, state.pipeline, state.tools);
-                      }
-                    }, state.expandedSessions.has(session.sessionId) ? '收起工具流' : '展开全部工具流')
-                  ) : null
-                ),
-              ];
-              return children;
-            })
+                ];
+                return children;
+              })
+            )
+          ) : el('div', { className: 'flow-meta' },
+            el('span', null, '开始 ', formatTs(flow.startedAt)),
+            el('span', null, '最近更新 ', formatTs(flow.updatedAt)),
+            el('span', null, '当前仅显示主 Session 摘要')
           )
         );
-        root.appendChild(card);
+          sectionNode.appendChild(card);
+        }
+        root.appendChild(sectionNode);
       }
       if ((!tools.events || tools.events.length === 0) && tools.debug) {
         root.appendChild(el('div', { className: 'diagnostic' },
@@ -700,6 +770,10 @@
     });
     document.getElementById('scope-filter').addEventListener('change', (e) => {
       state.filters.scope = e.target.value;
+      if (state.sessions && state.pipeline && state.tools) renderDashboard(state.sessions, state.pipeline, state.tools);
+    });
+    document.getElementById('system-filter').addEventListener('change', (e) => {
+      state.filters.system = e.target.value;
       if (state.sessions && state.pipeline && state.tools) renderDashboard(state.sessions, state.pipeline, state.tools);
     });
     document.getElementById('include-orphans').addEventListener('change', (e) => {
