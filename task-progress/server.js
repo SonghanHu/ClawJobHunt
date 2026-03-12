@@ -39,14 +39,20 @@ function readSessionsForAgent(agentId) {
   for (const [sessionKey, meta] of Object.entries(data)) {
     if (!meta || typeof meta !== 'object') continue;
     const flowMeta = extractFlowMeta(meta.label);
+    let flowId = flowMeta.flowId;
+    let taskTitle = flowMeta.taskTitle;
+    if (agentId === 'main' && !flowId && meta.sessionId) {
+      flowId = `main-session-${meta.sessionId}`;
+      taskTitle = taskTitle || meta.origin?.label || (meta.chatType === 'channel' ? '主龙虾 · 渠道会话' : '主龙虾 · 直接会话');
+    }
     entries.push({
       agentId,
       sessionKey,
       sessionId: meta.sessionId,
       label: meta.label || null,
       cleanLabel: flowMeta.cleanLabel,
-      flowId: flowMeta.flowId,
-      taskTitle: flowMeta.taskTitle,
+      flowId,
+      taskTitle,
       spawnedBy: meta.spawnedBy || null,
       updatedAt: meta.updatedAt,
       chatType: meta.chatType,

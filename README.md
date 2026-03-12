@@ -1,96 +1,41 @@
-# Separation-of-Powers Agent
+# Separation-of-Powers Agent (OpenClaw)
 
 > *"The accumulation of all powers, legislative, executive, and judiciary, in the same hands … may justly be pronounced the very definition of tyranny."*
 > — James Madison, Federalist No. 47 (1788)
 
-Madison was talking about government. But he could have been talking about AI agents.
+Multi-agent system on [OpenClaw](https://github.com/openclaw/openclaw): **main** (🦞 龙虾) for general chat and channels, **secretary** (📋) orchestrating Legislature → Executive → Judiciary with flowId-tracked task flows. Includes a **task-progress** dashboard to observe sessions, tool calls, and flows.
 
-## The Problem with Single-Agent Systems
+---
 
-Give one AI agent full power — planning, execution, and self-review — and you get the digital equivalent of an unchecked monarch. It decides what to do, does it, and tells you it went great. No oversight. No audit trail. No separation between "what should we do" and "did we do it right."
+## Architecture
 
-In the real world, we solved this problem 250 years ago. Montesquieu proposed it. The American Founders built it. Every functioning democracy runs on it: **separation of powers**.
+| Agent | Role |
+|-------|------|
+| 🦞 **main** | Default assistant — webchat, Discord, WhatsApp, cron; each session has its own flowId for the dashboard |
+| 📋 **secretary** | Orchestrator — turns your request into a task packet, spawns branches, enforces the 6-phase protocol |
+| 🏛️ **legislature** | Policy — defines rules, constraints, acceptance criteria |
+| ⚙️ **executive** | Plan & execute — proposes plans, runs after Judiciary approval |
+| ⚖️ **judiciary** | Review — APPROVE / MODIFY / DENY; final review of execution |
 
-This project applies the same principle to AI agents.
+Secretary uses `sessions_spawn` with labels like `[flow:yyyyMMdd-HHmmss-xxxx] Legislature: Policy Draft - TASK_TITLE`. Same flowId is reused for the whole chain so the dashboard can group phases into one task flow.
 
-## The Architecture
+---
 
-```
-         ┌─────────┐
-         │   You   │
-         └────┬────┘
-              │
-         ┌────▼────┐
-         │Secretary │  ← Your chief of staff
-         │   📋     │
-         └──┬─┬─┬──┘
-            │ │ │
-   ┌────────┘ │ └────────┐
-   ▼          ▼          ▼
-┌──────┐  ┌──────┐  ┌──────┐
-│Legis.│  │Exec. │  │Judic.│
-│  🏛️  │  │  ⚙️  │  │  ⚖️  │
-└──────┘  └──────┘  └──────┘
- Policy     Plan     Review
-```
+## What’s in the box
 
-| Agent | Role | Real-World Analog |
-|-------|------|-------------------|
-| 📋 **Secretary** | Orchestrator | Chief of Staff — translates your intent, coordinates branches |
-| 🏛️ **Legislature** | Policy Maker | Congress — defines rules, budgets, constraints, acceptance criteria |
-| ⚙️ **Executive** | Planner & Doer | President / agencies — proposes plans, executes after approval |
-| ⚖️ **Judiciary** | Reviewer | Supreme Court — reviews for compliance, risk, and evidence |
+- **OpenClaw Gateway** — Docker, MiniMax M2.5 (or swap model), WhatsApp / Discord / Gmail, Brave Search, gh, gog, Go, LaTeX, etc.
+- **Task Progress Dashboard** — Read-only UI at **http://localhost:3080**: flowchart view of sessions and tool calls, split into **三权分立系统** (Secretary/Legislature/Executive/Judiciary) and **龙虾主系统** (main agent). FlowId-based grouping; main sessions get a synthetic flowId so they appear as proper flows.
+- **Session model** — New conversation = new session; shared long-term context lives in `USER.md` (and planned `MEMORY.md`), not in transcript.
 
-### Why This Works
+---
 
-The same reason it works in government:
-
-- **No single agent can act unilaterally.** The Legislature sets rules but can't execute. The Executive executes but needs approval. The Judiciary reviews but can't act.
-- **Every action has an audit trail.** Policy → Plan → Verdict → Execution → Final Review. Every phase produces structured, inspectable output.
-- **Mistakes get caught before they happen.** The Judiciary reviews plans *before* execution, not after. A MODIFY verdict sends the Executive back to the drawing board.
-- **Power is bounded.** Each agent has explicit constraints on what it can and cannot do, enforced by the others.
-
-### The Historical Parallel
-
-| Concept | Government | This System |
-|---------|-----------|-------------|
-| Checks & balances | Legislature writes law, Executive enforces, Judiciary interprets | Legislature writes policy, Executive plans/executes, Judiciary approves/denies |
-| Veto power | President vetoes bills, Court strikes down laws | Judiciary returns MODIFY/DENY, Executive must revise |
-| Separation of concerns | Congress doesn't command armies, courts don't write laws | Legislature doesn't execute, Executive doesn't self-review |
-| Transparency | Public record, FOIA | Structured output at every phase, full execution logs |
-| Due process | No punishment without trial | No execution without Judiciary approval |
-
-### The 6-Phase Protocol
-
-```
-Phase A  →  Legislature drafts POLICY
-Phase B  →  Executive drafts PLAN (within policy)
-Phase C  →  Judiciary reviews: APPROVE / DENY / MODIFY
-Phase D  →  Executive revises (if MODIFY) — loop until APPROVED
-Phase E  →  Executive executes, producing evidence per step
-Phase F  →  Judiciary conducts FINAL REVIEW
-```
-
-The Secretary orchestrates this entire flow automatically using OpenClaw's `sessions_spawn` sub-agent system. You give it a task; it runs the full protocol and reports back.
-
-## What's in the Box
-
-Beyond the multi-agent system, this is a fully configured [OpenClaw](https://github.com/openclaw/openclaw) Gateway deployment:
-
-- **Docker-based** — one `docker compose up` and you're running
-- **MiniMax M2.5** as default model (swap for OpenAI, Anthropic, etc.)
-- **WhatsApp** integration
-- **Gmail** access via OAuth
-- **Brave Search**, **GitHub CLI**, **Go**, **LaTeX**, **Homebrew** baked in
-- **Persistent config** — survives restarts and rebuilds
-
-## Quick Start
+## Quick start
 
 ### 1. Clone and configure
 
 ```bash
-git clone https://github.com/SonghanHu/ClawJobHunt.git
-cd ClawJobHunt
+git clone <your-repo>
+cd openclaw
 cp .env.example .env
 ```
 
@@ -98,163 +43,109 @@ Edit `.env`:
 
 | Variable | Description |
 |----------|-------------|
-| `OPENCLAW_GATEWAY_TOKEN` | Generate with `openssl rand -hex 32` |
+| `OPENCLAW_GATEWAY_TOKEN` | `openssl rand -hex 32` |
 | `OPENCLAW_CONFIG_DIR` | Absolute path to `.openclaw-data/` |
 | `OPENCLAW_WORKSPACE_DIR` | Same path + `/workspace` |
-| `MINIMAX_API_KEY` | From [MiniMax Platform](https://platform.minimaxi.com) |
+| `MINIMAX_API_KEY` | [MiniMax Platform](https://platform.minimaxi.com) |
 | `BRAVE_API_KEY` | *(optional)* [Brave Search API](https://brave.com/search/api/) |
 
 ### 2. Build and start
 
 ```bash
 ./setup.sh
-```
-
-Or manually:
-
-```bash
-docker compose build
 docker compose up -d
 ```
 
-### 3. Set up the multi-agent system
+### 3. Multi-agent setup
 
 ```bash
 ./setup-agents.sh
 ```
 
-This creates all 4 agents, deploys their personalities from `templates/`, configures sub-agent permissions, and restarts the gateway.
+Creates secretary, legislature, executive, judiciary; deploys SOUL/IDENTITY/USER from `templates/agents/`; configures sub-agent permissions; restarts the gateway.
 
-### 4. Open the Dashboard
+### 4. Open control console and task progress
 
-```
-http://localhost:18789/?token=<YOUR_TOKEN>
-```
+- **Control console (chat):**  
+  `http://localhost:18789/?token=<YOUR_TOKEN>`
 
-First connection requires device pairing:
+  First time: pair device:
+  ```bash
+  docker compose exec openclaw-gateway openclaw devices list
+  docker compose exec openclaw-gateway openclaw devices approve <request-id>
+  ```
 
-```bash
-docker compose exec openclaw-gateway openclaw devices list
-docker compose exec openclaw-gateway openclaw devices approve <request-id>
-```
+- **Task progress (read-only dashboard):**  
+  `http://localhost:3080`  
+  No token; mounts `.openclaw-data` read-only. Shows sessions, pipeline phases, and tool calls (e.g. `web_search`) per flow.
 
-### 5. Talk to the Secretary
+### 5. Talk to Secretary (or main)
 
-Navigate to:
+- Secretary:  
+  `http://localhost:18789/chat?session=agent%3Asecretary%3Amain`
+- Main:  
+  `http://localhost:18789/chat?session=agent%3Amain%3Amain`
 
-```
-http://localhost:18789/chat?session=agent%3Asecretary%3Amain
-```
+### 6. New session / switch session
 
-Give it a task. Watch the branches deliberate.
+- **New main session:** In the control UI, use the **New session** button or type **`/new`** or **`/reset`** in the chat input.
+- **Switch session:** Change the URL `session=` parameter to the desired session key (e.g. `agent%3Amain%3Adiscord%3Achannel%3A123`), or use the session list in the UI if available.
 
-### 6. Connect WhatsApp (optional)
+---
 
-```bash
-docker compose exec -it openclaw-gateway openclaw channels login --channel whatsapp
-```
+## Task Progress (任务进度)
 
-## Gmail Setup
+- **URL:** http://localhost:3080 (or `TASK_PROGRESS_PORT`)
+- **Start:** `docker compose up -d task-progress`  
+  After code changes: `docker compose up -d --force-recreate task-progress` so the container repacks the app.
 
-The image includes [gogcli](https://github.com/teddyknox/gogcli) for Gmail access:
+**Tabs:**
 
-1. Create a Google Cloud project → enable Gmail API → create OAuth Desktop credentials
-2. Add yourself as a test user (or publish the app)
-3. Import credentials and authorize:
+- **Dashboard** — Flows grouped by system (三权分立 / 龙虾主系统). Each flow shows phases/sessions and tool call timeline. Filters: agent, scope (active/all/history), system, “显示未归档 session”.
+- **流程时间线** — Raw pipeline phases from Secretary `sessions_spawn` labels.
+- **全局工具流** — All tool calls across agents, reverse chronological.
 
-```bash
-docker cp client_secret.json openclaw-gateway:/tmp/client_secret.json
-docker compose exec openclaw-gateway gog auth credentials set /tmp/client_secret.json
-docker compose exec openclaw-gateway gog auth add you@gmail.com --services gmail --remote --step 1
-# Open the URL, authorize, copy redirect URL
-docker compose exec openclaw-gateway gog auth add you@gmail.com --services gmail --remote --step 2 \
-  --auth-url 'http://127.0.0.1:XXXXX/oauth2/callback?...'
-```
+**APIs:** `GET /api/sessions`, `GET /api/pipeline`, `GET /api/tools`, `GET /api/health`. See `task-progress/README.md` and `docs/TASK-PROGRESS-FRONTEND.md`.
 
-Tokens persist in `.gog-auth/` across restarts.
+---
 
-## Project Structure
+## Project structure
 
 ```
-├── docker-compose.yml          # Container orchestration
-├── Dockerfile                  # Custom image (gh, gog, go, brew, latex, ffmpeg)
-├── setup.sh                    # One-command basic deployment
-├── setup-agents.sh             # One-command multi-agent setup
-├── ARCHITECTURE.md             # Detailed architecture design
-├── templates/agents/           # SOUL.md, IDENTITY.md templates for each agent
-├── my_info/                    # Your files, mounted into the agent workspace
-├── .env.example                # Environment variable template
-└── .gitignore                  # Keeps your secrets out of git
+├── docker-compose.yml       # openclaw-gateway + task-progress
+├── Dockerfile               # Custom image (gh, gog, go, brew, latex, ffmpeg)
+├── setup.sh                 # Basic deployment
+├── setup-agents.sh          # Multi-agent setup (agents, SOUL, permissions)
+├── task-progress/           # Task progress backend + frontend (Node, port 3080)
+│   ├── server.js            # /api/sessions, /api/pipeline, /api/tools
+│   └── public/index.html    # Dashboard UI
+├── docs/
+│   └── TASK-PROGRESS-FRONTEND.md
+├── templates/agents/       # SOUL.md, IDENTITY.md, USER.md per agent
+├── my_info/                 # Mounted into agent workspace
+├── ARCHITECTURE.md          # Protocol, workspace layout, session key format
+├── .env.example
+└── .gitignore               # .openclaw-data, .env, .gog-auth, etc.
 ```
 
-## Pre-installed Tools
-
-| Tool | Purpose |
-|------|---------|
-| `gh` | GitHub CLI |
-| `gog` | Google Workspace CLI (Gmail, Calendar, Drive) |
-| `go` | Go runtime |
-| `brew` | Homebrew |
-| `pdflatex` | LaTeX → PDF compilation |
-| `jq` | JSON processing |
-| `ffmpeg` | Media processing |
-| `git` | Version control |
+---
 
 ## Customization
 
-### Change the default model
+- **Default model:**  
+  `docker compose exec openclaw-gateway openclaw config set agents.defaults.model minimax/MiniMax-M2.5` then restart.
+- **Agent personalities:** Edit `templates/agents/*_SOUL.md` and run `./setup-agents.sh`, or edit `.openclaw-data/workspace-{agent}/SOUL.md` directly.
+- **FlowId protocol:** Secretary SOUL defines the `[flow:...]` label format and that the same flowId is used for the whole chain; task-progress parses it for grouping.
 
-```bash
-docker compose exec openclaw-gateway openclaw config set agents.defaults.model minimax/MiniMax-M2.5
-docker compose restart openclaw-gateway
-```
-
-### Edit agent personalities
-
-Modify `templates/agents/*_SOUL.md` and rerun `./setup-agents.sh`, or edit directly in `.openclaw-data/workspace-{agent}/SOUL.md`.
-
-### Mount your own directories
-
-```yaml
-# docker-compose.yml → volumes
-- /your/path:/home/node/.openclaw/workspace/folder_name:ro
-```
-
-### Deploy to a VM
-
-For 24/7 uptime (recommended — your laptop sleeping kills WhatsApp):
-
-1. Spin up a VM (1 vCPU, 1GB RAM is enough)
-2. Install Docker
-3. `scp` the folder, update paths in `.env`
-4. `docker compose build && docker compose up -d`
-5. Re-pair WhatsApp
+---
 
 ## Security
 
-- `.env`, `.openclaw-data/`, `.gog-auth/`, `client_secret*.json` are git-ignored
-- Token auth is required for dashboard access
-- Gateway binds to LAN by default — set `OPENCLAW_GATEWAY_BIND=loopback` for localhost-only
-- Access control: only the owner can modify agent settings (enforced in `USER.md`)
+- `.env`, `.openclaw-data/`, `.gog-auth/`, and secrets are git-ignored.
+- Dashboard access is token-protected; task-progress is read-only and uses mounted config only.
+- Access control (only owner may change settings) is enforced in `USER.md` across workspaces.
 
-## Why "Separation of Powers" for AI?
-
-We're entering an era where AI agents take real actions — sending emails, writing code, managing finances, making decisions. The stakes are no longer theoretical.
-
-A single unchecked agent is a single point of failure. It hallucinates? Nobody catches it. It misunderstands the task? It plows ahead anyway. It takes an irreversible action? Too late.
-
-The Founders didn't trust any single branch of government with unchecked power — not because the people in those branches were bad, but because **concentrated power is inherently risky, regardless of intent.**
-
-The same logic applies to AI. Not because the models are malicious, but because:
-
-- **Models hallucinate.** A reviewer catches what the doer misses.
-- **Context gets lost.** Structured handoffs between agents preserve intent better than one long conversation.
-- **Irreversible actions need gates.** An approval step before execution is cheap insurance.
-- **Audit trails matter.** When something goes wrong, you want to know exactly where and why.
-
-This isn't about distrusting AI. It's about building systems that are **robust by design** — the same way we build redundancy into bridges, backups into databases, and checks into democracies.
-
-*"Trust, but verify."* — Ronald Reagan (and also good systems engineering)
+---
 
 ## License
 

@@ -530,7 +530,7 @@
       const orphanSessionsWithoutFlowId = enriched.filter((session) => !usedSessionIds.has(session.sessionId));
       const managedOrphans = orphanSessionsWithoutFlowId.filter((session) => {
         const kind = classifySession(session);
-        return session.toolCount > 0 && kind !== 'channel' && kind !== 'cron';
+        return session.toolCount > 0 && kind !== 'cron';
       }).map((session) => ({
         id: 'session-flow-' + session.sessionId,
         title: session.taskTitle || taskTitleFromLabel(session.label),
@@ -549,7 +549,7 @@
       }));
 
       const hiddenSummary = {
-        channels: orphanSessionsWithoutFlowId.filter((session) => classifySession(session) === 'channel').length,
+        channels: 0,
         cron: orphanSessionsWithoutFlowId.filter((session) => classifySession(session) === 'cron').length,
         orphanTaskLike: managedOrphans.length,
       };
@@ -641,7 +641,7 @@
           ]),
         ].filter(Boolean).some((value) => String(value).toLowerCase().includes(query));
       });
-      hiddenSummaryRoot.textContent = '默认隐藏了 ' + flowData.hiddenSummary.channels + ' 个渠道 session、' + flowData.hiddenSummary.cron + ' 个 cron/run session，以及 ' + flowData.hiddenSummary.orphanTaskLike + ' 个未归档 session。可通过“显示未归档 session”查看后者。';
+      hiddenSummaryRoot.textContent = '默认隐藏了 ' + flowData.hiddenSummary.cron + ' 个 cron/run session；当前展示中的未归档 session 数量为 ' + flowData.hiddenSummary.orphanTaskLike + '。可通过“显示未归档 session”控制是否展示这些未并入明确流程的会话。';
       root.innerHTML = '';
       if (!filtered.length) {
         root.appendChild(el('div', { className: 'empty' }, '没有匹配的任务流。'));
