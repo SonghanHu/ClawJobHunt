@@ -32,3 +32,17 @@ services:
       - sh
       - -lc
       - openclaw gateway --allow-unconfigured
+
+  task-progress:
+    image: node:20-alpine
+    container_name: task-progress
+    restart: unless-stopped
+    ports:
+      - "${TASK_PROGRESS_PORT:-3080}:3080"
+    environment:
+      PORT: 3080
+      OPENCLAW_CONFIG_DIR: /data
+    volumes:
+      - ./task-progress:/app:ro
+      - ${OPENCLAW_CONFIG_DIR}:/data:ro
+    command: sh -c "cp -r /app /tmp/app && cd /tmp/app && npm install --omit=dev && node server.js"
